@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLO Video Detection</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+
+        :root {
+            --primary-color: #4a90e2;
+            --background-color: #1a1a2e;
+            --card-background: #16213e;
+            --text-color: #e0e1dd;
+            --subtle-text: #a8a8a8;
+            --border-color: #0f3460;
+            --success-color: #50c878;
+        }
+
+        body {
+            font-family: 'Cairo', sans-serif;
+            background: linear-gradient(135deg, var(--background-color) 0%, #1e2a50 100%);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: var(--card-background);
+            padding: 40px 50px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            font-weight: 700;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, var(--primary-color), var(--success-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        header p {
+            color: var(--subtle-text);
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+
+        .upload-area {
+            border: 2px dashed var(--border-color);
+            padding: 50px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .upload-area:hover, .upload-area.dragover {
+            border-color: var(--primary-color);
+            background-color: rgba(74, 144, 226, 0.1);
+        }
+        .upload-area p {
+            margin: 0;
+            font-size: 1.1em;
+            color: var(--subtle-text);
+            pointer-events: none;
+        }
+        .upload-area p strong {
+            color: var(--primary-color);
+        }
+        #file-input {
+            display: none;
+        }
+
+        #status-area {
+            margin-top: 30px;
+            text-align: center;
+            min-height: 50px;
+        }
+        
+        .loader {
+            border: 4px solid var(--border-color);
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #status-text {
+            font-size: 1.2em;
+            margin-top: 15px;
+        }
+
+        .download-button {
+            display: inline-block;
+            background: linear-gradient(90deg, var(--success-color), #28a745);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 1.2em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(80, 200, 120, 0.3);
+        }
+        .download-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(80, 200, 120, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Video Object Detection</h1>
+            <p>ارفع ملف الفيديو لتحليله باستخدام YOLO</p>
+        </header>
+        <form id="upload-form">
+            <div class="upload-area" id="upload-area">
+                <p>اسحب الفيديو هنا أو <strong>اضغط للاختيار</strong></p>
+                <input type="file" id="file-input" name="video_file" accept="video/*">
+            </div>
+        </form>
+        <div id="status-area"></div>
+    </div>
+    <script>
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const statusArea = document.getElementById('status-area');
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, e => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => uploadArea.classList.add('dragover'));
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => uploadArea.classList.remove('dragover'));
+        });
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('drop', e => {
+            fileInput.files = e.dataTransfer.files;
+            handleFileSelect();
+        });
+
+        fileInput.addEventListener('change', handleFileSelect);
+
+        async function handleFileSelect() {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            statusArea.innerHTML = `
+                <div class="loader"></div>
+                <p id="status-text">جاري رفع وتحليل الفيديو... برجاء الانتظار، قد تستغرق العملية بعض الوقت.</p>
+            `;
+
+            const formData = new FormData();
+            formData.append('video_file', file);
+
+            try {
+                const response = await fetch('/predict_video', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'حدث خطأ غير معروف.');
+                }
+                
+                statusArea.innerHTML = `
+                    <p id="status-text">اكتمل التحليل بنجاح!</p>
+                    <a href="${data.download_url}" class="download-button">تحميل الفيديو الجديد</a>
+                `;
+
+            } catch (error) {
+                statusArea.innerHTML = `<p id="status-text" style="color: #e74c3c;">فشل التحليل: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
